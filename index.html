@@ -424,6 +424,7 @@
   /* ===== 手機封面：手指左右滑動提示（取代滑鼠圖示） ===== */
   .cover-cue .hand { display: none; }
   html.phone .cover-cue .mouse { display: none; }
+  html.phone .cover-cue .en { white-space: nowrap; font-size: 10px; letter-spacing: .28em; margin-bottom: 6px; }
   html.phone .cover-cue .hand {
     display: block; position: relative; width: 120px; height: 62px; margin: 0 auto 10px;
   }
@@ -459,6 +460,11 @@
   }
   @keyframes handArrow { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .cover-cue .hand .finger, .cover-cue .hand .dot, .cover-cue .hand .arr { animation: none; } }
+  /* 手機：放大的卡片盡量佔滿畫面，可再用雙指放大 */
+  html.phone .modal-backdrop { padding: 12px; }
+  html.phone .modal-title { color: #24382f; font-size: 14px; padding-right: 8px; }
+  html.phone .modal-stage { height: calc(100vh - 170px); }
+  html.phone .modal-stage img { border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 </style>
 </head>
 <body>
@@ -851,7 +857,7 @@
   // 手機／平板（觸控裝置）：降低繪圖負擔，翻頁才順。電腦版維持原本畫質。
   const IS_PHONE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   document.documentElement.classList.toggle('phone', IS_PHONE);
-  const MAX_DPR = IS_PHONE ? 1.5 : 2;
+  const MAX_DPR = 2; // 手機也用 2 倍，字才清楚（手機已關掉陰影，效能有餘裕；跑不動時會自動降，最低 1 倍）
   const MAX_ANISO = Math.min(IS_PHONE ? 4 : 16, renderer.capabilities.getMaxAnisotropy() || 4);
   renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
@@ -1752,11 +1758,9 @@
   $('pnNext').onclick = () => goPage(curPage() + 1);
   syncPhoneNav(0);
 
-  let cueDismissed = false; // 手機：手指一碰畫面，封面的滑動提示就淡出
   if (IS_PHONE) {
-    addEventListener('touchstart', () => { cueDismissed = true; }, { passive: true, once: true });
-    $('coverCue').querySelector('.en').textContent = 'Swipe to turn the pages';
-    $('coverCue').querySelector('.zh').textContent = '左右滑動翻頁';
+    $('coverCue').querySelector('.en').textContent = 'Swipe to turn · Tap to zoom';
+    $('coverCue').querySelector('.zh').textContent = '左右滑動翻頁・點卡片放大';
     let sx = 0, sy0 = 0, st = 0, startIdx = 0, touching = false, needSnap = false, idleTimer = 0;
     const blocked = el => !!(el && el.closest && el.closest('.top-actions, .phone-nav, .hud-panel, .modal-backdrop, button, a'));
     addEventListener('touchstart', e => {
@@ -1773,6 +1777,8 @@
       if ($('origModal').classList.contains('open') || blocked(e.target)) return;
       // 左右滑動：往左滑 = 下一章，往右滑 = 上一章
       if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3 && dt < 900) { goPage(startIdx + (dx < 0 ? 1 : -1)); return; }
+      // 輕點（幾乎沒移動）：點到卡片就放大
+      if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 600) { openCardAt(t.clientX, t.clientY); return; }
       if (Math.abs(dy) > 8) { needSnap = true; armSnap(); }
     }, { passive: true });
     addEventListener('touchcancel', () => { touching = false; needSnap = true; armSnap(); }, { passive: true });
@@ -1810,15 +1816,29 @@
   document.addEventListener('pointerleave', () => { ptr.tx = ptr.ty = 0; mouseNDC.set(-99, -99); });
 
   // 點擊任一張空中懸浮卡片 → 直接彈出高畫質放大細讀燈箱！
+  function openCard(item) {
+    SFX.play('pop');
+    $('modalTitle').textContent = CHAPTERS[activeChapterIdx].fullTitle + '（卡片放大檢視）';
+    $('modalImg').src = item.cfg.src;
+    [...modalTabs.children].forEach((b, i) => b.classList.toggle('on', i === activeChapterIdx));
+    $('origModal').classList.add('open');
+  }
   canvas.addEventListener('click', () => {
-    if (hoveredItem && hoveredItem.cfg && hoveredItem.cfg.src) {
-      SFX.play('pop');
-      $('modalTitle').textContent = CHAPTERS[activeChapterIdx].fullTitle + '（卡片放大檢視）';
-      $('modalImg').src = hoveredItem.cfg.src;
-      [...modalTabs.children].forEach((b, i) => b.classList.toggle('on', i === activeChapterIdx));
-      $('origModal').classList.add('open');
-    }
+    if (hoveredItem && hoveredItem.cfg && hoveredItem.cfg.src) openCard(hoveredItem);
   });
+  // 手機：點到哪張卡片（含章節標題），就打開那張卡片的高解析原圖，可以再用雙指放大細看
+  const tapNDC = new THREE.Vector2();
+  function openCardAt(cx, cy) {
+    const stage = popupStageGroups[activeChapterIdx];
+    if (!stage || !stage.group.visible) return false;
+    const items = stage.items.filter(it => it.isHang && it.cfg && it.cfg.src && it.mesh);
+    tapNDC.set(cx / viewW * 2 - 1, -(cy / viewH) * 2 + 1);
+    raycaster.setFromCamera(tapNDC, camera);
+    const hits = raycaster.intersectObjects(items.map(it => it.mesh), false);
+    if (!hits.length) return false;
+    openCard(items.find(it => it.mesh === hits[0].object));
+    return true;
+  }
 
   // 手機捲動時網址列會伸縮、一直觸發 resize；重設畫布很耗時，會造成卡頓。
   // 所以手機上只有「寬度改變」（例如轉橫向）或畫面變得更高時才重設，網址列縮回來時沿用原本大小。
@@ -2074,7 +2094,8 @@
     $('hill3').style.transform = `translate3d(${(-ptr.x * 22).toFixed(2)}px, ${(ptr.y * 6).toFixed(2)}px, 0)`;
 
     // 4. 封面提示與封底結尾按鈕（其餘所有資訊皆已直接立在 3D 書頁上！）
-    $('coverCue').style.opacity = (globalP < 0.04 && !cueDismissed) ? 1 : 0;
+    // 手機：滑動提示一直留著（只在最後的結尾面板時隱藏）；電腦：只在封面顯示
+    $('coverCue').style.opacity = (IS_PHONE ? globalP <= 0.94 : globalP < 0.04) ? 1 : 0;
     hudPanels.forEach(panel => {
       const hIdx = +panel.dataset.hud;
       const show = (hIdx === 6) && (globalP > 0.94);
