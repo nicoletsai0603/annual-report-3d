@@ -395,6 +395,70 @@
   /* 換章時背景色直接切換：慢慢漸變會讓整頁每一幀重算、重畫，手機會頓一下 */
   html.phone, html.phone .backdrop { transition: none !important; }
   html.phone .modal-backdrop { background: rgba(236, 240, 238, .9); }
+  /* ===== 手機翻頁操作：底部上一頁／下一頁按鈕（只在手機／平板顯示） ===== */
+  .phone-nav { display: none; }
+  html.phone .chapter-nav { display: none; }
+  html.phone .phone-nav {
+    display: flex; align-items: center; gap: 6px;
+    position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    z-index: 60; padding: 6px; border-radius: 999px;
+    background: rgba(255, 255, 255, .92); border: 1px solid rgba(40, 80, 64, .14);
+    box-shadow: 0 10px 28px rgba(60, 100, 85, .22);
+    transition: opacity .35s ease, transform .35s ease;
+  }
+  html.phone .phone-nav.hide { opacity: 0; pointer-events: none; transform: translate(-50%, 12px); }
+  .phone-nav button {
+    width: 48px; height: 48px; border-radius: 50%; border: 0; cursor: pointer;
+    display: grid; place-items: center; background: #2f6b55; color: #fff;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .phone-nav button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .phone-nav button:active { transform: scale(.92); }
+  .phone-nav button:disabled { background: rgba(40, 80, 64, .14); color: rgba(40, 80, 64, .35); }
+  .phone-nav .pn-label { min-width: 104px; text-align: center; line-height: 1.15; color: #24382f; }
+  .phone-nav .pn-label b { display: block; font-size: 15px; font-weight: 800; letter-spacing: .06em; }
+  .phone-nav .pn-label small { font-size: 11px; color: #8a6a2a; font-family: Georgia, serif; letter-spacing: .1em; }
+  html.phone .cover-cue { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+  /* 左右滑動交給立體書翻頁，不讓瀏覽器當成「返回上一頁」；上下捲動與雙指縮放照常 */
+  html.phone, html.phone body { overscroll-behavior-x: none; touch-action: pan-y pinch-zoom; }
+  /* ===== 手機封面：手指左右滑動提示（取代滑鼠圖示） ===== */
+  .cover-cue .hand { display: none; }
+  html.phone .cover-cue .mouse { display: none; }
+  html.phone .cover-cue .hand {
+    display: block; position: relative; width: 120px; height: 62px; margin: 0 auto 10px;
+  }
+  .cover-cue .hand .track {
+    position: absolute; left: 14px; right: 14px; top: 16px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, rgba(47, 107, 85, .35), transparent);
+  }
+  .cover-cue .hand .arr {
+    position: absolute; top: 7px; width: 20px; height: 20px; color: #e09a2c;
+    animation: handArrow 2.4s ease-in-out infinite;
+  }
+  .cover-cue .hand .arr svg { width: 100%; height: 100%; stroke: currentColor; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .cover-cue .hand .arr.l { left: 0; }
+  .cover-cue .hand .arr.r { right: 0; animation-delay: 1.2s; }
+  .cover-cue .hand .finger {
+    position: absolute; left: 50%; top: 6px; width: 40px; height: 52px; margin-left: -14px;
+    animation: handSwipe 2.4s ease-in-out infinite; transform-origin: 14px 8px;
+  }
+  .cover-cue .hand .finger svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 6px rgba(40, 80, 64, .25)); }
+  .cover-cue .hand .dot {
+    position: absolute; left: 50%; top: 9px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%;
+    background: rgba(224, 154, 44, .35); animation: handDot 2.4s ease-in-out infinite;
+  }
+  @keyframes handSwipe {
+    0%, 8%   { transform: translateX(26px) rotate(8deg); }
+    42%, 54% { transform: translateX(-26px) rotate(-8deg); }
+    88%, 100% { transform: translateX(26px) rotate(8deg); }
+  }
+  @keyframes handDot {
+    0%, 8%   { transform: translateX(26px) scale(.6); opacity: .9; }
+    42%, 54% { transform: translateX(-26px) scale(1.1); opacity: .5; }
+    88%, 100% { transform: translateX(26px) scale(.6); opacity: .9; }
+  }
+  @keyframes handArrow { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .cover-cue .hand .finger, .cover-cue .hand .dot, .cover-cue .hand .arr { animation: none; } }
 </style>
 </head>
 <body>
@@ -429,6 +493,11 @@
 </header>
 
 <nav class="chapter-nav" id="chapterNav" aria-label="章節導覽"></nav>
+<nav class="phone-nav" id="phoneNav" aria-label="翻頁">
+  <button type="button" id="pnPrev" aria-label="上一頁"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <div class="pn-label" aria-live="polite"><b id="pnName">封面</b><small id="pnNum">1 / 7</small></div>
+  <button type="button" id="pnNext" aria-label="下一頁"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+</nav>
 
 <div id="loader">
   <div>
@@ -461,6 +530,13 @@
 
 <div class="cover-cue" id="coverCue">
   <div class="mouse"></div>
+  <div class="hand" aria-hidden="true">
+    <div class="track"></div>
+    <div class="arr l"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></div>
+    <div class="arr r"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+    <div class="dot"></div>
+    <div class="finger"><svg viewBox="0 0 40 52"><path d="M11 30V8a4 4 0 0 1 8 0v14l0-2a4 4 0 0 1 8 0v3a4 4 0 0 1 8 0v9c0 10-6 17-15 17h-1c-6 0-9-3-13-8l-5-7a4 4 0 0 1 6-5l4 4z" fill="#fffdf8" stroke="#2f6b55" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
+  </div>
   <div class="en">Scroll to turn the pages</div>
   <div class="zh">往下捲動，翻開大地醫生的立體書</div>
 </div>
@@ -1634,6 +1710,86 @@
   $('btnOrigEnd').onclick = () => openModal(0);
   $('btnCloseModal').onclick = () => $('origModal').classList.remove('open');
   $('origModal').onclick = e => { if (e.target === $('origModal')) $('origModal').classList.remove('open'); };
+
+  /* ---- 手機翻頁操作：左右滑動翻頁、放開後自動停在完整打開的一章、底部上一頁／下一頁按鈕 ---- */
+  const LAST = CHAPTERS.length - 1;
+  const maxScroll = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  // 每一章「完整打開、卡片都立好」的捲動位置（跟章節導覽點用的位置一樣）
+  const restTop = idx => ((idx + ((idx > 0 && idx < LAST) ? 0.45 : 0)) / LAST) * maxScroll();
+  const nearestRest = y => { let best = 0; for (let i = 1; i <= LAST; i++) if (Math.abs(restTop(i) - y) < Math.abs(restTop(best) - y)) best = i; return best; };
+  let autoRaf = 0, autoScrolling = false;
+  function glideTo(top, ms) {
+    cancelAnimationFrame(autoRaf);
+    const from = window.scrollY, dist = top - from;
+    if (Math.abs(dist) < 2) { autoScrolling = false; return; }
+    const dur = ms || Math.min(1100, 520 + Math.abs(dist) / innerHeight * 140);
+    const t0 = performance.now();
+    autoScrolling = true;
+    const step = now => {
+      const k = Math.min(1, (now - t0) / dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      window.scrollTo(0, from + dist * e);
+      if (k < 1) autoRaf = requestAnimationFrame(step); else autoScrolling = false;
+    };
+    autoRaf = requestAnimationFrame(step);
+  }
+  let pageIdx = 0; // 目前停在第幾章（0 = 封面）
+  function syncPhoneNav(idx) {
+    $('pnName').textContent = CHAPTERS[idx].name;
+    $('pnNum').textContent = (idx + 1) + ' / ' + (LAST + 1);
+    $('pnPrev').disabled = idx <= 0;
+    $('pnNext').disabled = idx >= LAST;
+  }
+  function goPage(idx) {
+    idx = Math.max(0, Math.min(LAST, idx));
+    if (idx !== pageIdx) SFX.play('page');
+    pageIdx = idx;
+    syncPhoneNav(idx);
+    glideTo(restTop(idx));
+  }
+  // 正在自動翻頁時以「要去的那一章」為準，連按幾次就前進幾章
+  const curPage = () => autoScrolling ? pageIdx : nearestRest(window.scrollY);
+  $('pnPrev').onclick = () => goPage(curPage() - 1);
+  $('pnNext').onclick = () => goPage(curPage() + 1);
+  syncPhoneNav(0);
+
+  let cueDismissed = false; // 手機：手指一碰畫面，封面的滑動提示就淡出
+  if (IS_PHONE) {
+    addEventListener('touchstart', () => { cueDismissed = true; }, { passive: true, once: true });
+    $('coverCue').querySelector('.en').textContent = 'Swipe to turn the pages';
+    $('coverCue').querySelector('.zh').textContent = '左右滑動翻頁';
+    let sx = 0, sy0 = 0, st = 0, startIdx = 0, touching = false, needSnap = false, idleTimer = 0;
+    const blocked = el => !!(el && el.closest && el.closest('.top-actions, .phone-nav, .hud-panel, .modal-backdrop, button, a'));
+    addEventListener('touchstart', e => {
+      if (e.touches.length !== 1 || blocked(e.target)) return; // 點按鈕時不打斷正在進行的翻頁
+      startIdx = curPage();
+      cancelAnimationFrame(autoRaf); autoScrolling = false;
+      touching = true; needSnap = false;
+      sx = e.touches[0].clientX; sy0 = e.touches[0].clientY; st = performance.now();
+    }, { passive: true });
+    addEventListener('touchend', e => {
+      touching = false;
+      const t = e.changedTouches[0]; if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy0, dt = performance.now() - st;
+      if ($('origModal').classList.contains('open') || blocked(e.target)) return;
+      // 左右滑動：往左滑 = 下一章，往右滑 = 上一章
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3 && dt < 900) { goPage(startIdx + (dx < 0 ? 1 : -1)); return; }
+      if (Math.abs(dy) > 8) { needSnap = true; armSnap(); }
+    }, { passive: true });
+    addEventListener('touchcancel', () => { touching = false; needSnap = true; armSnap(); }, { passive: true });
+    // 上下滑放開後，等慣性捲動停下來，自動翻到最近的一章並停好（不會卡在翻到一半）
+    function armSnap() { clearTimeout(idleTimer); idleTimer = setTimeout(snapNow, 170); }
+    addEventListener('scroll', () => { if (needSnap && !autoScrolling && !touching) armSnap(); }, { passive: true });
+    function snapNow() {
+      if (!needSnap || touching || autoScrolling) return;
+      needSnap = false;
+      const y = window.scrollY, unit = maxScroll() / LAST, from = restTop(startIdx);
+      let target = nearestRest(y);
+      if (y > from + unit * 0.12) target = Math.max(target, startIdx + 1);       // 往下滑超過一點點就翻到下一章
+      else if (y < from - unit * 0.12) target = Math.min(target, startIdx - 1);  // 往上滑超過一點點就回上一章
+      else target = startIdx;                                                     // 只動一點點：回到原本這章
+      goPage(target);
+    }
+  }
   $('btnReplay').onclick = () => { SFX.play('page'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   /* =========================================================================
@@ -1700,6 +1856,7 @@
     if (displayIdx !== activeChapterIdx) {
       activeChapterIdx = displayIdx;
       navBtns.forEach((b, i) => b.classList.toggle('on', i === displayIdx));
+      if (!autoScrolling) { pageIdx = displayIdx; syncPhoneNav(displayIdx); }
       targetFogColor.setHex(CHAPTERS[displayIdx].fogColor);
       targetLightColor.setHex(CHAPTERS[displayIdx].lightColor);
       if ($('capIdx')) $('capIdx').textContent = `0${displayIdx} / 06`;
@@ -1917,7 +2074,7 @@
     $('hill3').style.transform = `translate3d(${(-ptr.x * 22).toFixed(2)}px, ${(ptr.y * 6).toFixed(2)}px, 0)`;
 
     // 4. 封面提示與封底結尾按鈕（其餘所有資訊皆已直接立在 3D 書頁上！）
-    $('coverCue').style.opacity = globalP < 0.04 ? 1 : 0;
+    $('coverCue').style.opacity = (globalP < 0.04 && !cueDismissed) ? 1 : 0;
     hudPanels.forEach(panel => {
       const hIdx = +panel.dataset.hud;
       const show = (hIdx === 6) && (globalP > 0.94);
@@ -1925,6 +2082,7 @@
     });
 
     $('stageCaption').classList.toggle('hide', globalP > 0.94);
+    $('phoneNav').classList.toggle('hide', globalP > 0.94);
     $('progFill').style.width = (globalP * 100).toFixed(2) + '%';
     lastProgress = globalP;
   }
