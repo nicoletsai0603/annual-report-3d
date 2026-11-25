@@ -177,7 +177,7 @@
     content: ''; position: absolute; left: 50%; top: 7px; width: 3px; height: 8px; margin-left: -1.5px;
     border-radius: 2px; background: #f6d384; animation: wheel 1.8s ease-in-out infinite;
   }
-  @keyframes wheel { 0% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(12px); opacity: 0; } 100% { opacity: 0; } }
+  @keyframes wheel { 0%, 100% { transform: translateY(0); opacity: 1; } 55% { transform: translateY(11px); opacity: .45; } }
   .cover-cue .en {
     font-size: 11px; letter-spacing: .42em; text-transform: uppercase;
     color: rgba(247, 212, 134, .88); margin-bottom: 8px; font-weight: 700;
@@ -465,6 +465,25 @@
   html.phone .modal-title { color: #24382f; font-size: 14px; padding-right: 8px; }
   html.phone .modal-stage { height: calc(100vh - 170px); }
   html.phone .modal-stage img { border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  /* ===== 電腦版：滑鼠滾輪提示（滑鼠圖示的滾輪亮起＋往下箭頭） ===== */
+  .cover-cue .mouse { width: 28px; height: 44px; border-width: 2px; border-color: rgba(47, 107, 85, .75); margin-bottom: 4px; }
+  .cover-cue .mouse::after { width: 5px; height: 10px; margin-left: -2.5px; top: 8px; border-radius: 3px; background: #e09a2c; box-shadow: 0 0 0 3px rgba(224, 154, 44, .22); }
+  .cover-cue .chev { position: relative; width: 20px; height: 22px; margin: 0 auto 8px; }
+  .cover-cue .chev i {
+    position: absolute; left: 50%; width: 10px; height: 10px; margin-left: -5px;
+    border-right: 2.4px solid #e09a2c; border-bottom: 2.4px solid #e09a2c; transform: rotate(45deg);
+    animation: chevDown 1.6s ease-in-out infinite;
+  }
+  .cover-cue .chev i:nth-child(1) { top: 0; }
+  .cover-cue .chev i:nth-child(2) { top: 8px; animation-delay: .2s; }
+  @keyframes chevDown { 0% { opacity: 0; transform: translateY(-4px) rotate(45deg); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateY(6px) rotate(45deg); } }
+  html.phone .cover-cue .chev { display: none; }
+  @media (prefers-reduced-motion: reduce) { .cover-cue .chev i { animation: none; opacity: .9; } }
+  .stage-caption .wheel-ico {
+    display: inline-block; vertical-align: -3px; width: 10px; height: 15px; margin-right: 6px; position: relative;
+    border: 1.6px solid currentColor; border-radius: 6px; opacity: .85;
+  }
+  .stage-caption .wheel-ico::after { content: ''; position: absolute; left: 50%; top: 2px; width: 2px; height: 4px; margin-left: -1px; border-radius: 1px; background: currentColor; }
 </style>
 </head>
 <body>
@@ -531,7 +550,7 @@
   <span class="sep">|</span>
   <span id="capTitle">封面｜大地健檢・永續土水</span>
   <span class="sep">·</span>
-  <span class="tip">點擊懸浮卡片可放大細讀</span>
+  <span class="tip"><span class="wheel-ico" aria-hidden="true"></span>滾輪往下翻頁・點擊卡片放大細讀</span>
 </div>
 
 <div class="cover-cue" id="coverCue">
@@ -543,8 +562,9 @@
     <div class="dot"></div>
     <div class="finger"><svg viewBox="0 0 40 52"><path d="M11 30V8a4 4 0 0 1 8 0v14l0-2a4 4 0 0 1 8 0v3a4 4 0 0 1 8 0v9c0 10-6 17-15 17h-1c-6 0-9-3-13-8l-5-7a4 4 0 0 1 6-5l4 4z" fill="#fffdf8" stroke="#2f6b55" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
   </div>
-  <div class="en">Scroll to turn the pages</div>
-  <div class="zh">往下捲動，翻開大地醫生的立體書</div>
+  <div class="chev" aria-hidden="true"><i></i><i></i></div>
+  <div class="en">Scroll down with your mouse wheel</div>
+  <div class="zh">滾動滑鼠滾輪往下，翻開立體書</div>
 </div>
 
 <!-- 封底結束按鈕（其餘所有章節資訊皆直接立體化放置在 3D 書頁上！） -->
