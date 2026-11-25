@@ -389,6 +389,12 @@
     opacity: 0; transform: translateY(-4px); transition: opacity .4s ease, transform .4s ease;
   }
   .sound-group.need-tap .tap-hint { opacity: 1; transform: none; }
+  /* 手機／平板：關掉毛玻璃與大面積模糊（每一幀都要重算，最吃手機效能），改用較不透明的底色 */
+  html.phone *, html.phone *::before, html.phone *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  html.phone .beam { filter: none; }
+  /* 換章時背景色直接切換：慢慢漸變會讓整頁每一幀重算、重畫，手機會頓一下 */
+  html.phone, html.phone .backdrop { transition: none !important; }
+  html.phone .modal-backdrop { background: rgba(236, 240, 238, .9); }
 </style>
 </head>
 <body>
@@ -766,12 +772,17 @@
      ========================================================================= */
   const canvas = $('gl-canvas');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-  const MAX_ANISO = Math.min(16, renderer.capabilities.getMaxAnisotropy() || 4);
+  // 手機／平板（觸控裝置）：降低繪圖負擔，翻頁才順。電腦版維持原本畫質。
+  const IS_PHONE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  document.documentElement.classList.toggle('phone', IS_PHONE);
+  const MAX_DPR = IS_PHONE ? 1.5 : 2;
+  const MAX_ANISO = Math.min(IS_PHONE ? 4 : 16, renderer.capabilities.getMaxAnisotropy() || 4);
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // 手機：關掉即時陰影（手機畫面小、陰影幾乎看不出來，但它是最耗效能的部分）
+  renderer.shadowMap.enabled = !IS_PHONE;
+  renderer.shadowMap.type = IS_PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
   // 關閉 ACESFilmicToneMapping，完整保留 PSD 原稿的清新粉彩色調不偏黃！
   renderer.toneMapping = THREE.NoToneMapping;
@@ -792,8 +803,8 @@
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
   dirLight.position.set(4.2, 10.0, 5.2);
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.mapSize.width = IS_PHONE ? 1024 : 2048;
+  dirLight.shadow.mapSize.height = IS_PHONE ? 1024 : 2048;
   dirLight.shadow.camera.near = 1;
   dirLight.shadow.camera.far = 25;
   dirLight.shadow.camera.left = -6;
@@ -926,7 +937,7 @@
   }
   const leafTex = [makeLeafTexture('#8fd6a5', '#4fae7c'), makeLeafTexture('#cfe8a0', '#8cc56a'), makeLeafTexture('#a9dfe6', '#63b9cf')];
   const leaves = [];
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < (IS_PHONE ? 12 : 30); i++) {
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(0.36, 0.36),
       new THREE.MeshBasicMaterial({ map: leafTex[i % 3], transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false })
@@ -1427,7 +1438,7 @@
     });
     const mesh = new THREE.Mesh(placeholderGeo, mat);
     if (cfg.noString) mesh.renderOrder = 99;
-    mesh.castShadow = false; mesh.receiveShadow = true;
+    mesh.castShadow = false; mesh.receiveShadow = !IS_PHONE; // 手機：卡片本身不算陰影（只有書頁接收陰影）
     pivot.add(mesh);
 
     // 如果是空中吊線懸浮模式（且非無繩標題）：極細微光金絲吊線 ＋ 精緻黃銅雞眼扣！
@@ -1653,10 +1664,17 @@
     }
   });
 
+  // 手機捲動時網址列會伸縮、一直觸發 resize；重設畫布很耗時，會造成卡頓。
+  // 所以手機上只有「寬度改變」（例如轉橫向）或畫面變得更高時才重設，網址列縮回來時沿用原本大小。
+  let viewW = window.innerWidth, viewH = window.innerHeight;
   addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const w = window.innerWidth, h = window.innerHeight;
+    if (IS_PHONE && w === viewW && h <= viewH) return;
+    viewH = (w === viewW) ? Math.max(viewH, h) : h;
+    viewW = w;
+    camera.aspect = viewW / viewH;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(viewW, viewH);
   });
 
   const hudPanels = [...document.querySelectorAll('.hud-panel')];
@@ -1858,7 +1876,7 @@
 
     // 3. 書本視覺佔比調整為 60%～75%：留出優雅四周空間與底部 HUD 距離，前後排立體紙雕清晰分層！
     const curlWave = Math.sin(flipT * Math.PI);
-    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const aspect = viewW / Math.max(1, viewH); // 用畫布大小，手機網址列伸縮時鏡頭不跟著跳
     const distScale = Math.max(1.02, 1.62 / Math.max(0.68, aspect));
 
     // 探索階段 [0.05 ~ 0.62] 鏡頭微幅左右巡航，呈現濃厚立體景深
@@ -1932,7 +1950,7 @@
   }
 
   // ---- 自動調整解析度：電腦跑不動時逐步降低繪圖解析度，換取翻頁流暢 ----
-  let pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  let pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_DPR);
   // 每次只降一級，並檢查「降了之後有沒有真的變順」：沒有的話代表瓶頸不在繪圖
   // （例如瀏覽器省電模式或視窗被限速），就還原解析度並停止調整，不讓畫面白白變糊。
   let perfSum = 0, perfN = 0, perfSkip = 0, perfOff = false, perfTrial = null;
