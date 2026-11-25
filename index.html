@@ -2130,18 +2130,28 @@
 
   // ---- 自動調整解析度：電腦跑不動時逐步降低繪圖解析度，換取翻頁流暢 ----
   let pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  // 雙指放大畫面時：依放大倍率提高繪圖解析度重畫，放大後的字和插圖才清楚（最高 4 倍，避免手機記憶體不夠）
+  let zoomScale = 1, zoomSeen = 1, zoomSince = 0;
+  function applyRatio() { renderer.setPixelRatio(Math.min(4, pixelRatio * zoomScale)); }
+  // 每一幀檢查放大倍率；手指停下來約 0.2 秒才重畫，縮放過程中不會一直重建畫面
+  function watchZoom(now) {
+    const vv = window.visualViewport; if (!vv) return;
+    let z = Math.max(1, Math.min(3, vv.scale || 1)); if (z < 1.1) z = 1;
+    if (Math.abs(z - zoomSeen) > 0.02) { zoomSeen = z; zoomSince = now; return; }
+    if (Math.abs(z - zoomScale) >= 0.15 && now - zoomSince > 200) { zoomScale = z; applyRatio(); }
+  }
   // 每次只降一級，並檢查「降了之後有沒有真的變順」：沒有的話代表瓶頸不在繪圖
   // （例如瀏覽器省電模式或視窗被限速），就還原解析度並停止調整，不讓畫面白白變糊。
   let perfSum = 0, perfN = 0, perfSkip = 0, perfOff = false, perfTrial = null;
   function watchPerf(frameMs) {
-    if (perfOff || !started || document.hidden || frameMs > 250) return; // 分頁在背景或剛切回來的不算
+    if (perfOff || !started || document.hidden || frameMs > 250 || zoomScale > 1.05) return; // 分頁在背景或剛切回來的不算
     if (perfSkip > 0) { perfSkip--; return; }                            // 剛改完解析度的前幾幀不算
     perfSum += frameMs; perfN++;
     if (perfN < 60) return;
     const avg = perfSum / perfN; perfSum = perfN = 0;
     if (perfTrial) {
       const helped = avg < perfTrial.avg * 0.85;
-      if (!helped) { pixelRatio = perfTrial.ratio; renderer.setPixelRatio(pixelRatio); perfOff = true; }
+      if (!helped) { pixelRatio = perfTrial.ratio; applyRatio(); perfOff = true; }
       perfTrial = null;
       if (!helped) return;
     }
@@ -2149,7 +2159,7 @@
     if (avg > 24 && pixelRatio > minRatio) {
       perfTrial = { avg, ratio: pixelRatio };
       pixelRatio = Math.max(minRatio, pixelRatio - 0.25);
-      renderer.setPixelRatio(pixelRatio);
+      applyRatio();
       perfSkip = 12;
     }
   }
@@ -2188,6 +2198,7 @@
     } else {
       renderer.render(scene, camera);
       watchPerf(frameMs);
+      watchZoom(ts);
     }
     requestAnimationFrame(animate);
   }
